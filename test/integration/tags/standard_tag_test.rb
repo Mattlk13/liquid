@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'test_helper'
 
 class StandardTagTest < Minitest::Test
@@ -69,7 +71,7 @@ class StandardTagTest < Minitest::Test
     assert_raises(SyntaxError) do
       assert_template_result('content foo content foo ',
         '{{ var2 }}{% capture %}{{ var }} foo {% endcapture %}{{ var2 }}{{ var2 }}',
-        { 'var' => 'content' })
+        'var' => 'content')
     end
   end
 
@@ -172,47 +174,52 @@ class StandardTagTest < Minitest::Test
 
   def test_assign_from_case
     # Example from the shopify forums
-    code = "{% case collection.handle %}{% when 'menswear-jackets' %}{% assign ptitle = 'menswear' %}{% when 'menswear-t-shirts' %}{% assign ptitle = 'menswear' %}{% else %}{% assign ptitle = 'womenswear' %}{% endcase %}{{ ptitle }}"
+    code     = "{% case collection.handle %}{% when 'menswear-jackets' %}{% assign ptitle = 'menswear' %}{% when 'menswear-t-shirts' %}{% assign ptitle = 'menswear' %}{% else %}{% assign ptitle = 'womenswear' %}{% endcase %}{{ ptitle }}"
     template = Liquid::Template.parse(code)
-    assert_equal "menswear",   template.render!("collection" => { 'handle' => 'menswear-jackets' })
-    assert_equal "menswear",   template.render!("collection" => { 'handle' => 'menswear-t-shirts' })
-    assert_equal "womenswear", template.render!("collection" => { 'handle' => 'x' })
-    assert_equal "womenswear", template.render!("collection" => { 'handle' => 'y' })
-    assert_equal "womenswear", template.render!("collection" => { 'handle' => 'z' })
+    assert_equal("menswear",   template.render!("collection" => { 'handle' => 'menswear-jackets' }))
+    assert_equal("menswear",   template.render!("collection" => { 'handle' => 'menswear-t-shirts' }))
+    assert_equal("womenswear", template.render!("collection" => { 'handle' => 'x' }))
+    assert_equal("womenswear", template.render!("collection" => { 'handle' => 'y' }))
+    assert_equal("womenswear", template.render!("collection" => { 'handle' => 'z' }))
   end
 
   def test_case_when_or
     code = '{% case condition %}{% when 1 or 2 or 3 %} its 1 or 2 or 3 {% when 4 %} its 4 {% endcase %}'
-    assert_template_result(' its 1 or 2 or 3 ', code, { 'condition' => 1 })
-    assert_template_result(' its 1 or 2 or 3 ', code, { 'condition' => 2 })
-    assert_template_result(' its 1 or 2 or 3 ', code, { 'condition' => 3 })
-    assert_template_result(' its 4 ', code, { 'condition' => 4 })
-    assert_template_result('', code, { 'condition' => 5 })
+    assert_template_result(' its 1 or 2 or 3 ', code, 'condition' => 1)
+    assert_template_result(' its 1 or 2 or 3 ', code, 'condition' => 2)
+    assert_template_result(' its 1 or 2 or 3 ', code, 'condition' => 3)
+    assert_template_result(' its 4 ', code, 'condition' => 4)
+    assert_template_result('', code, 'condition' => 5)
 
     code = '{% case condition %}{% when 1 or "string" or null %} its 1 or 2 or 3 {% when 4 %} its 4 {% endcase %}'
-    assert_template_result(' its 1 or 2 or 3 ', code, { 'condition' => 1 })
-    assert_template_result(' its 1 or 2 or 3 ', code, { 'condition' => 'string' })
-    assert_template_result(' its 1 or 2 or 3 ', code, { 'condition' => nil })
-    assert_template_result('', code, { 'condition' => 'something else' })
+    assert_template_result(' its 1 or 2 or 3 ', code, 'condition' => 1)
+    assert_template_result(' its 1 or 2 or 3 ', code, 'condition' => 'string')
+    assert_template_result(' its 1 or 2 or 3 ', code, 'condition' => nil)
+    assert_template_result('', code, 'condition' => 'something else')
   end
 
   def test_case_when_comma
     code = '{% case condition %}{% when 1, 2, 3 %} its 1 or 2 or 3 {% when 4 %} its 4 {% endcase %}'
-    assert_template_result(' its 1 or 2 or 3 ', code, { 'condition' => 1 })
-    assert_template_result(' its 1 or 2 or 3 ', code, { 'condition' => 2 })
-    assert_template_result(' its 1 or 2 or 3 ', code, { 'condition' => 3 })
-    assert_template_result(' its 4 ', code, { 'condition' => 4 })
-    assert_template_result('', code, { 'condition' => 5 })
+    assert_template_result(' its 1 or 2 or 3 ', code, 'condition' => 1)
+    assert_template_result(' its 1 or 2 or 3 ', code, 'condition' => 2)
+    assert_template_result(' its 1 or 2 or 3 ', code, 'condition' => 3)
+    assert_template_result(' its 4 ', code, 'condition' => 4)
+    assert_template_result('', code, 'condition' => 5)
 
     code = '{% case condition %}{% when 1, "string", null %} its 1 or 2 or 3 {% when 4 %} its 4 {% endcase %}'
-    assert_template_result(' its 1 or 2 or 3 ', code, { 'condition' => 1 })
-    assert_template_result(' its 1 or 2 or 3 ', code, { 'condition' => 'string' })
-    assert_template_result(' its 1 or 2 or 3 ', code, { 'condition' => nil })
-    assert_template_result('', code, { 'condition' => 'something else' })
+    assert_template_result(' its 1 or 2 or 3 ', code, 'condition' => 1)
+    assert_template_result(' its 1 or 2 or 3 ', code, 'condition' => 'string')
+    assert_template_result(' its 1 or 2 or 3 ', code, 'condition' => nil)
+    assert_template_result('', code, 'condition' => 'something else')
+  end
+
+  def test_case_when_comma_and_blank_body
+    code = '{% case condition %}{% when 1, 2 %} {% assign r = "result" %} {% endcase %}{{ r }}'
+    assert_template_result('result', code, 'condition' => 2)
   end
 
   def test_assign
-    assert_template_result 'variable', '{% assign a = "variable"%}{{a}}'
+    assert_template_result('variable', '{% assign a = "variable"%}{{a}}')
   end
 
   def test_assign_unassigned
@@ -221,11 +228,11 @@ class StandardTagTest < Minitest::Test
   end
 
   def test_assign_an_empty_string
-    assert_template_result '', '{% assign a = ""%}{{a}}'
+    assert_template_result('', '{% assign a = ""%}{{a}}')
   end
 
   def test_assign_is_global
-    assert_template_result 'variable', '{%for i in (1..2) %}{% assign a = "variable"%}{% endfor %}{{a}}'
+    assert_template_result('variable', '{%for i in (1..2) %}{% assign a = "variable"%}{% endfor %}{{a}}')
   end
 
   def test_case_detects_bad_syntax
@@ -283,14 +290,14 @@ class StandardTagTest < Minitest::Test
   end
 
   def test_ifchanged
-    assigns = { 'array' => [ 1, 1, 2, 2, 3, 3] }
+    assigns = { 'array' => [1, 1, 2, 2, 3, 3] }
     assert_template_result('123', '{%for item in array%}{%ifchanged%}{{item}}{% endifchanged %}{%endfor%}', assigns)
 
-    assigns = { 'array' => [ 1, 1, 1, 1] }
+    assigns = { 'array' => [1, 1, 1, 1] }
     assert_template_result('1', '{%for item in array%}{%ifchanged%}{{item}}{% endifchanged %}{%endfor%}', assigns)
   end
 
   def test_multiline_tag
-    assert_template_result '0 1 2 3', "0{%\nfor i in (1..3)\n%} {{\ni\n}}{%\nendfor\n%}"
+    assert_template_result('0 1 2 3', "0{%\nfor i in (1..3)\n%} {{\ni\n}}{%\nendfor\n%}")
   end
 end # StandardTagTest

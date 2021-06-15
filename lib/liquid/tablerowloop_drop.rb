@@ -1,11 +1,13 @@
+# frozen_string_literal: true
+
 module Liquid
   class TablerowloopDrop < Drop
     def initialize(length, cols)
       @length = length
-      @row = 1
-      @col = 1
-      @cols = cols
-      @index = 0
+      @row    = 1
+      @col    = 1
+      @cols   = cols
+      @index  = 0
     end
 
     attr_reader :length, :col, :row

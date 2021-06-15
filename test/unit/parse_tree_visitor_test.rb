@@ -26,6 +26,13 @@ class ParseTreeVisitorTest < Minitest::Test
     )
   end
 
+  def test_echo
+    assert_equal(
+      ["test"],
+      visit(%({% echo test %}))
+    )
+  end
+
   def test_if_condition
     assert_equal(
       ["test"],
@@ -227,7 +234,7 @@ class ParseTreeVisitorTest < Minitest::Test
       [[nil, [
         [nil, [[nil, [["other", []]]]]],
         ["test", []],
-        ["xs", []]
+        ["xs", []],
       ]]],
       traversal(%({% for x in xs offset: test %}{{ other }}{% endfor %})).visit
     )
@@ -238,7 +245,7 @@ class ParseTreeVisitorTest < Minitest::Test
   def traversal(template)
     ParseTreeVisitor
       .for(Template.parse(template).root)
-      .add_callback_for(VariableLookup, &:name)
+      .add_callback_for(VariableLookup) { |node| node.name } # rubocop:disable Style/SymbolProc
   end
 
   def visit(template)

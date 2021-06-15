@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Liquid
   class Error < ::StandardError
     attr_accessor :line_number
@@ -5,7 +7,7 @@ module Liquid
     attr_accessor :markup_context
 
     def to_s(with_prefix = true)
-      str = ""
+      str = +""
       str << message_prefix if with_prefix
       str << super()
 
@@ -20,11 +22,11 @@ module Liquid
     private
 
     def message_prefix
-      str = ""
-      if is_a?(SyntaxError)
-        str << "Liquid syntax error"
+      str = +""
+      str << if is_a?(SyntaxError)
+        "Liquid syntax error"
       else
-        str << "Liquid error"
+        "Liquid error"
       end
 
       if line_number
@@ -38,19 +40,19 @@ module Liquid
     end
   end
 
-  ArgumentError = Class.new(Error)
-  ContextError = Class.new(Error)
-  FileSystemError = Class.new(Error)
-  StandardError = Class.new(Error)
-  SyntaxError = Class.new(Error)
-  StackLevelError = Class.new(Error)
-  TaintedError = Class.new(Error)
-  MemoryError = Class.new(Error)
-  ZeroDivisionError = Class.new(Error)
-  FloatDomainError = Class.new(Error)
-  UndefinedVariable = Class.new(Error)
+  ArgumentError       = Class.new(Error)
+  ContextError        = Class.new(Error)
+  FileSystemError     = Class.new(Error)
+  StandardError       = Class.new(Error)
+  SyntaxError         = Class.new(Error)
+  StackLevelError     = Class.new(Error)
+  MemoryError         = Class.new(Error)
+  ZeroDivisionError   = Class.new(Error)
+  FloatDomainError    = Class.new(Error)
+  UndefinedVariable   = Class.new(Error)
   UndefinedDropMethod = Class.new(Error)
-  UndefinedFilter = Class.new(Error)
+  UndefinedFilter     = Class.new(Error)
   MethodOverrideError = Class.new(Error)
-  InternalError = Class.new(Error)
+  DisabledError       = Class.new(Error)
+  InternalError       = Class.new(Error)
 end

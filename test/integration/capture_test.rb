@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'test_helper'
 
 class CaptureTest < Minitest::Test
@@ -12,9 +14,9 @@ class CaptureTest < Minitest::Test
     {% capture this-thing %}Print this-thing{% endcapture %}
     {{ this-thing }}
     END_TEMPLATE
-    template = Template.parse(template_source)
-    rendered = template.render!
-    assert_equal "Print this-thing", rendered.strip
+    template        = Template.parse(template_source)
+    rendered        = template.render!
+    assert_equal("Print this-thing", rendered.strip)
   end
 
   def test_capture_to_variable_from_outer_scope_if_existing
@@ -28,9 +30,9 @@ class CaptureTest < Minitest::Test
     {% endif %}
     {{var}}
     END_TEMPLATE
-    template = Template.parse(template_source)
-    rendered = template.render!
-    assert_equal "test-string", rendered.gsub(/\s/, '')
+    template        = Template.parse(template_source)
+    rendered        = template.render!
+    assert_equal("test-string", rendered.gsub(/\s/, ''))
   end
 
   def test_assigning_from_capture
@@ -43,8 +45,14 @@ class CaptureTest < Minitest::Test
     {% endfor %}
     {{ first }}-{{ second }}
     END_TEMPLATE
-    template = Template.parse(template_source)
-    rendered = template.render!
-    assert_equal "3-3", rendered.gsub(/\s/, '')
+    template        = Template.parse(template_source)
+    rendered        = template.render!
+    assert_equal("3-3", rendered.gsub(/\s/, ''))
   end
-end # CaptureTest
+
+  def test_increment_assign_score_by_bytes_not_characters
+    t = Template.parse("{% capture foo %}すごい{% endcapture %}")
+    t.render!
+    assert_equal(9, t.resource_limits.assign_score)
+  end
+end

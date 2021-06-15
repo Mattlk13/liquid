@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'test_helper'
 
 class ParsingQuirksTest < Minitest::Test
@@ -5,7 +7,7 @@ class ParsingQuirksTest < Minitest::Test
 
   def test_parsing_css
     text = " div { font-weight: bold; } "
-    assert_equal text, Template.parse(text).render!
+    assert_equal(text, Template.parse(text).render!)
   end
 
   def test_raise_on_single_close_bracet
@@ -27,10 +29,10 @@ class ParsingQuirksTest < Minitest::Test
   end
 
   def test_error_on_empty_filter
-    assert Template.parse("{{test}}")
+    assert(Template.parse("{{test}}"))
 
     with_error_mode(:lax) do
-      assert Template.parse("{{|test}}")
+      assert(Template.parse("{{|test}}"))
     end
 
     with_error_mode(:strict) do
@@ -62,15 +64,15 @@ class ParsingQuirksTest < Minitest::Test
   end
 
   def test_no_error_on_lax_empty_filter
-    assert Template.parse("{{test |a|b|}}", error_mode: :lax)
-    assert Template.parse("{{test}}", error_mode: :lax)
-    assert Template.parse("{{|test|}}", error_mode: :lax)
+    assert(Template.parse("{{test |a|b|}}", error_mode: :lax))
+    assert(Template.parse("{{test}}", error_mode: :lax))
+    assert(Template.parse("{{|test|}}", error_mode: :lax))
   end
 
   def test_meaningless_parens_lax
     with_error_mode(:lax) do
       assigns = { 'b' => 'bar', 'c' => 'baz' }
-      markup = "a == 'foo' or (b == 'bar' and c == 'baz') or false"
+      markup  = "a == 'foo' or (b == 'bar' and c == 'baz') or false"
       assert_template_result(' YES ', "{% if #{markup} %} YES {% endif %}", assigns)
     end
   end
@@ -114,6 +116,16 @@ class ParsingQuirksTest < Minitest::Test
     with_error_mode(:lax) do
       assert_template_result('12345', "{% for i in (1...5) %}{{ i }}{% endfor %}")
     end
+  end
+
+  def test_blank_variable_markup
+    assert_template_result('', "{{}}")
+  end
+
+  def test_lookup_on_var_with_literal_name
+    assigns = { "blank" => { "x" => "result" } }
+    assert_template_result('result', "{{ blank.x }}", assigns)
+    assert_template_result('result', "{{ blank['x'] }}", assigns)
   end
 
   def test_contains_in_id

@@ -1,20 +1,24 @@
+# frozen_string_literal: true
+
 require 'cgi'
+require 'base64'
 require 'bigdecimal'
 
 module Liquid
   module StandardFilters
+    MAX_INT = (1 << 31) - 1
     HTML_ESCAPE = {
-      '&'.freeze => '&amp;'.freeze,
-      '>'.freeze => '&gt;'.freeze,
-      '<'.freeze => '&lt;'.freeze,
-      '"'.freeze => '&quot;'.freeze,
-      "'".freeze => '&#39;'.freeze
+      '&' => '&amp;',
+      '>' => '&gt;',
+      '<' => '&lt;',
+      '"' => '&quot;',
+      "'" => '&#39;',
     }.freeze
     HTML_ESCAPE_ONCE_REGEXP = /["><']|&(?!([a-zA-Z]+|(#\d+));)/
-    STRIP_HTML_BLOCKS = Regexp.union(
-      /<script.*?<\/script>/m,
+    STRIP_HTML_BLOCKS       = Regexp.union(
+      %r{<script.*?</script>}m,
       /<!--.*?-->/m,
-      /<style.*?<\/style>/m
+      %r{<style.*?</style>}m
     )
     STRIP_HTML_TAGS = /<.*?>/m
 
@@ -39,7 +43,7 @@ module Liquid
     end
 
     def escape(input)
-      CGI.escapeHTML(input.to_s).untaint unless input.nil?
+      CGI.escapeHTML(input.to_s) unless input.nil?
     end
     alias_method :h, :escape
 
@@ -60,6 +64,26 @@ module Liquid
       result
     end
 
+    def base64_encode(input)
+      Base64.strict_encode64(input.to_s)
+    end
+
+    def base64_decode(input)
+      Base64.strict_decode64(input.to_s)
+    rescue ::ArgumentError
+      raise Liquid::ArgumentError, "invalid base64 provided to base64_decode"
+    end
+
+    def base64_url_safe_encode(input)
+      Base64.urlsafe_encode64(input.to_s)
+    end
+
+    def base64_url_safe_decode(input)
+      Base64.urlsafe_decode64(input.to_s)
+    rescue ::ArgumentError
+      raise Liquid::ArgumentError, "invalid base64 provided to base64_url_safe_decode"
+    end
+
     def slice(input, offset, length = nil)
       offset = Utils.to_integer(offset)
       length = length ? Utils.to_integer(length) : 1
@@ -72,23 +96,36 @@ module Liquid
     end
 
     # Truncate a string down to x characters
-    def truncate(input, length = 50, truncate_string = "...".freeze)
+    def truncate(input, length = 50, truncate_string = "...")
       return if input.nil?
       input_str = input.to_s
-      length = Utils.to_integer(length)
+      length    = Utils.to_integer(length)
+
       truncate_string_str = truncate_string.to_s
+
       l = length - truncate_string_str.length
       l = 0 if l < 0
+
       input_str.length > length ? input_str[0...l].concat(truncate_string_str) : input_str
     end
 
-    def truncatewords(input, words = 15, truncate_string = "...".freeze)
+    def truncatewords(input, words = 15, truncate_string = "...")
       return if input.nil?
-      wordlist = input.to_s.split
+      input = input.to_s
       words = Utils.to_integer(words)
-      l = words - 1
-      l = 0 if l < 0
-      wordlist.length > l ? wordlist[0..l].join(" ".freeze).concat(truncate_string.to_s) : input
+      words = 1 if words <= 0
+
+      wordlist = begin
+        input.split(" ", words + 1)
+      rescue RangeError
+        raise if words + 1 < MAX_INT
+        # e.g. integer #{words} too big to convert to `int'
+        raise Liquid::ArgumentError, "integer #{words} too big for truncatewords"
+      end
+      return input if wordlist.length <= words
+
+      wordlist.pop
+      wordlist.join(" ").concat(truncate_string.to_s)
     end
 
     # Split input string into an array of substrings separated by given pattern.
@@ -113,7 +150,7 @@ module Liquid
     end
 
     def strip_html(input)
-      empty = ''.freeze
+      empty  = ''
       result = input.to_s.gsub(STRIP_HTML_BLOCKS, empty)
       result.gsub!(STRIP_HTML_TAGS, empty)
       result
@@ -121,18 +158,18 @@ module Liquid
 
     # Remove all newlines from the string
     def strip_newlines(input)
-      input.to_s.gsub(/\r?\n/, ''.freeze)
+      input.to_s.gsub(/\r?\n/, '')
     end
 
     # Join elements of the array with certain character between them
-    def join(input, glue = ' '.freeze)
-      InputIterator.new(input).join(glue)
+    def join(input, glue = ' ')
+      InputIterator.new(input, context).join(glue)
     end
 
     # Sort elements of the array
     # provide optional property with which to sort an array of hashes or drops
     def sort(input, property = nil)
-      ary = InputIterator.new(input)
+      ary = InputIterator.new(input, context)
 
       return [] if ary.empty?
 
@@ -152,7 +189,7 @@ module Liquid
     # Sort elements of an array ignoring case if strings
     # provide optional property with which to sort an array of hashes or drops
     def sort_natural(input, property = nil)
-      ary = InputIterator.new(input)
+      ary = InputIterator.new(input, context)
 
       return [] if ary.empty?
 
@@ -172,7 +209,7 @@ module Liquid
     # Filter the elements of an array to those with a certain property value.
     # By default the target is any truthy value.
     def where(input, property, target_value = nil)
-      ary = InputIterator.new(input)
+      ary = InputIterator.new(input, context)
 
       if ary.empty?
         []
@@ -194,7 +231,7 @@ module Liquid
     # Remove duplicate elements from an array
     # provide optional property with which to determine uniqueness
     def uniq(input, property = nil)
-      ary = InputIterator.new(input)
+      ary = InputIterator.new(input, context)
 
       if property.nil?
         ary.uniq
@@ -211,16 +248,16 @@ module Liquid
 
     # Reverse the elements of an array
     def reverse(input)
-      ary = InputIterator.new(input)
+      ary = InputIterator.new(input, context)
       ary.reverse
     end
 
     # map/collect on a given property
     def map(input, property)
-      InputIterator.new(input).map do |e|
+      InputIterator.new(input, context).map do |e|
         e = e.call if e.is_a?(Proc)
 
-        if property == "to_liquid".freeze
+        if property == "to_liquid"
           e
         elsif e.respond_to?(:[])
           r = e[property]
@@ -234,7 +271,7 @@ module Liquid
     # Remove nils within an array
     # provide optional property with which to check for nil
     def compact(input, property = nil)
-      ary = InputIterator.new(input)
+      ary = InputIterator.new(input, context)
 
       if property.nil?
         ary.compact
@@ -250,23 +287,23 @@ module Liquid
     end
 
     # Replace occurrences of a string with another
-    def replace(input, string, replacement = ''.freeze)
+    def replace(input, string, replacement = '')
       input.to_s.gsub(string.to_s, replacement.to_s)
     end
 
     # Replace the first occurrences of a string with another
-    def replace_first(input, string, replacement = ''.freeze)
+    def replace_first(input, string, replacement = '')
       input.to_s.sub(string.to_s, replacement.to_s)
     end
 
     # remove a substring
     def remove(input, string)
-      input.to_s.gsub(string.to_s, ''.freeze)
+      input.to_s.gsub(string.to_s, '')
     end
 
     # remove the first occurrences of a substring
     def remove_first(input, string)
-      input.to_s.sub(string.to_s, ''.freeze)
+      input.to_s.sub(string.to_s, '')
     end
 
     # add one string to another
@@ -276,9 +313,9 @@ module Liquid
 
     def concat(input, array)
       unless array.respond_to?(:to_ary)
-        raise ArgumentError.new("concat filter requires an array argument")
+        raise ArgumentError, "concat filter requires an array argument"
       end
-      InputIterator.new(input).concat(array)
+      InputIterator.new(input, context).concat(array)
     end
 
     # prepend a string to another
@@ -288,7 +325,7 @@ module Liquid
 
     # Add <br /> tags in front of all newlines in input string
     def newline_to_br(input)
-      input.to_s.gsub(/\n/, "<br />\n".freeze)
+      input.to_s.gsub(/\r?\n/, "<br />\n")
     end
 
     # Reformat a date using Ruby's core Time#strftime( string ) -> string
@@ -325,7 +362,7 @@ module Liquid
     def date(input, format)
       return input if format.to_s.empty?
 
-      return input unless date = Utils.to_date(input)
+      return input unless (date = Utils.to_date(input))
 
       date.strftime(format.to_s)
     end
@@ -419,18 +456,28 @@ module Liquid
       result.is_a?(BigDecimal) ? result.to_f : result
     end
 
-    def default(input, default_value = ''.freeze)
-      if !input || input.respond_to?(:empty?) && input.empty?
-        default_value
-      else
-        input
-      end
+    # Set a default value when the input is nil, false or empty
+    #
+    # Example:
+    #    {{ product.title | default: "No Title" }}
+    #
+    # Use `allow_false` when an input should only be tested against nil or empty and not false.
+    #
+    # Example:
+    #    {{ product.title | default: "No Title", allow_false: true }}
+    #
+    def default(input, default_value = '', options = {})
+      options = {} unless options.is_a?(Hash)
+      false_check = options['allow_false'] ? input.nil? : !Liquid::Utils.to_liquid_value(input)
+      false_check || (input.respond_to?(:empty?) && input.empty?) ? default_value : input
     end
 
     private
 
+    attr_reader :context
+
     def raise_property_error(property)
-      raise Liquid::ArgumentError.new("cannot select the property '#{property}'")
+      raise Liquid::ArgumentError, "cannot select the property '#{property}'"
     end
 
     def apply_operation(input, operand, operation)
@@ -457,8 +504,9 @@ module Liquid
     class InputIterator
       include Enumerable
 
-      def initialize(input)
-        @input = if input.is_a?(Array)
+      def initialize(input, context)
+        @context = context
+        @input   = if input.is_a?(Array)
           input.flatten
         elsif input.is_a?(Hash)
           [input]
@@ -496,6 +544,7 @@ module Liquid
 
       def each
         @input.each do |e|
+          e.context = @context if e.respond_to?(:context=)
           yield(e.respond_to?(:to_liquid) ? e.to_liquid : e)
         end
       end

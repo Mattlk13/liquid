@@ -1,45 +1,40 @@
+# frozen_string_literal: true
+
 module Liquid
   class Expression
-    class MethodLiteral
-      attr_reader :method_name, :to_s
-
-      def initialize(method_name, to_s)
-        @method_name = method_name
-        @to_s = to_s
-      end
-
-      def to_liquid
-        to_s
-      end
-    end
-
     LITERALS = {
-      nil => nil, 'nil'.freeze => nil, 'null'.freeze => nil, ''.freeze => nil,
-      'true'.freeze  => true,
-      'false'.freeze => false,
-      'blank'.freeze => MethodLiteral.new(:blank?, '').freeze,
-      'empty'.freeze => MethodLiteral.new(:empty?, '').freeze
+      nil => nil, 'nil' => nil, 'null' => nil, '' => nil,
+      'true' => true,
+      'false' => false,
+      'blank' => '',
+      'empty' => ''
     }.freeze
 
-    SINGLE_QUOTED_STRING = /\A'(.*)'\z/m
-    DOUBLE_QUOTED_STRING = /\A"(.*)"\z/m
-    INTEGERS_REGEX       = /\A(-?\d+)\z/
-    FLOATS_REGEX         = /\A(-?\d[\d\.]+)\z/
-    RANGES_REGEX         = /\A\((\S+)\.\.(\S+)\)\z/
+    SINGLE_QUOTED_STRING = /\A\s*'(.*)'\s*\z/m
+    DOUBLE_QUOTED_STRING = /\A\s*"(.*)"\s*\z/m
+    INTEGERS_REGEX       = /\A\s*(-?\d+)\s*\z/
+    FLOATS_REGEX         = /\A\s*(-?\d[\d\.]+)\s*\z/
+
+    # Use an atomic group (?>...) to avoid pathological backtracing from
+    # malicious input as described in https://github.com/Shopify/liquid/issues/1357
+    RANGES_REGEX         = /\A\s*\(\s*(?>(\S+)\s*\.\.)\s*(\S+)\s*\)\s*\z/
 
     def self.parse(markup)
-      if LITERALS.key?(markup)
-        LITERALS[markup]
+      case markup
+      when nil
+        nil
+      when SINGLE_QUOTED_STRING, DOUBLE_QUOTED_STRING
+        Regexp.last_match(1)
+      when INTEGERS_REGEX
+        Regexp.last_match(1).to_i
+      when RANGES_REGEX
+        RangeLookup.parse(Regexp.last_match(1), Regexp.last_match(2))
+      when FLOATS_REGEX
+        Regexp.last_match(1).to_f
       else
-        case markup
-        when SINGLE_QUOTED_STRING, DOUBLE_QUOTED_STRING
-          $1
-        when INTEGERS_REGEX
-          $1.to_i
-        when RANGES_REGEX
-          RangeLookup.parse($1, $2)
-        when FLOATS_REGEX
-          $1.to_f
+        markup = markup.strip
+        if LITERALS.key?(markup)
+          LITERALS[markup]
         else
           VariableLookup.parse(markup)
         end

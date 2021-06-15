@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Liquid
   # Container for liquid nodes which conveniently wraps decision making logic
   #
@@ -8,34 +10,53 @@ module Liquid
   #
   class Condition #:nodoc:
     @@operators = {
-      '=='.freeze => ->(cond, left, right) {  cond.send(:equal_variables, left, right) },
-      '!='.freeze => ->(cond, left, right) { !cond.send(:equal_variables, left, right) },
-      '<>'.freeze => ->(cond, left, right) { !cond.send(:equal_variables, left, right) },
-      '<'.freeze  => :<,
-      '>'.freeze  => :>,
-      '>='.freeze => :>=,
-      '<='.freeze => :<=,
-      'contains'.freeze => lambda do |cond, left, right|
+      '==' => ->(cond, left, right) {  cond.send(:equal_variables, left, right) },
+      '!=' => ->(cond, left, right) { !cond.send(:equal_variables, left, right) },
+      '<>' => ->(cond, left, right) { !cond.send(:equal_variables, left, right) },
+      '<' => :<,
+      '>' => :>,
+      '>=' => :>=,
+      '<=' => :<=,
+      'contains' => lambda do |_cond, left, right|
         if left && right && left.respond_to?(:include?)
           right = right.to_s if left.is_a?(String)
           left.include?(right)
         else
           false
         end
+      end,
+    }
+
+    class MethodLiteral
+      attr_reader :method_name, :to_s
+
+      def initialize(method_name, to_s)
+        @method_name = method_name
+        @to_s = to_s
       end
+    end
+
+    @@method_literals = {
+      'blank' => MethodLiteral.new(:blank?, '').freeze,
+      'empty' => MethodLiteral.new(:empty?, '').freeze,
     }
 
     def self.operators
       @@operators
     end
 
+    def self.parse_expression(parse_context, markup)
+      @@method_literals[markup] || parse_context.parse_expression(markup)
+    end
+
     attr_reader :attachment, :child_condition
     attr_accessor :left, :operator, :right
 
     def initialize(left = nil, operator = nil, right = nil)
-      @left = left
+      @left     = left
       @operator = operator
-      @right = right
+      @right    = right
+
       @child_relation  = nil
       @child_condition = nil
     end
@@ -60,12 +81,12 @@ module Liquid
     end
 
     def or(condition)
-      @child_relation = :or
+      @child_relation  = :or
       @child_condition = condition
     end
 
     def and(condition)
-      @child_relation = :and
+      @child_relation  = :and
       @child_condition = condition
     end
 
@@ -78,7 +99,7 @@ module Liquid
     end
 
     def inspect
-      "#<Condition #{[@left, @operator, @right].compact.join(' '.freeze)}>"
+      "#<Condition #{[@left, @operator, @right].compact.join(' ')}>"
     end
 
     protected
@@ -88,7 +109,7 @@ module Liquid
     private
 
     def equal_variables(left, right)
-      if left.is_a?(Liquid::Expression::MethodLiteral)
+      if left.is_a?(MethodLiteral)
         if right.respond_to?(left.method_name)
           return right.send(left.method_name)
         else
@@ -96,7 +117,7 @@ module Liquid
         end
       end
 
-      if right.is_a?(Liquid::Expression::MethodLiteral)
+      if right.is_a?(MethodLiteral)
         if left.respond_to?(right.method_name)
           return left.send(right.method_name)
         else
@@ -113,10 +134,10 @@ module Liquid
       # return this as the result.
       return context.evaluate(left) if op.nil?
 
-      left = context.evaluate(left)
-      right = context.evaluate(right)
+      left  = Liquid::Utils.to_liquid_value(context.evaluate(left))
+      right = Liquid::Utils.to_liquid_value(context.evaluate(right))
 
-      operation = self.class.operators[op] || raise(Liquid::ArgumentError.new("Unknown operator #{op}"))
+      operation = self.class.operators[op] || raise(Liquid::ArgumentError, "Unknown operator #{op}")
 
       if operation.respond_to?(:call)
         operation.call(self, left, right)
@@ -124,7 +145,7 @@ module Liquid
         begin
           left.send(operation, right)
         rescue ::ArgumentError => e
-          raise Liquid::ArgumentError.new(e.message)
+          raise Liquid::ArgumentError, e.message
         end
       end
     end

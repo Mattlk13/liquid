@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 source 'https://rubygems.org'
 git_source(:github) do |repo_name|
   "https://github.com/#{repo_name}.git"
@@ -16,10 +18,11 @@ group :benchmark, :test do
 end
 
 group :test do
-  gem 'rubocop', '~> 0.74.0', require: false
+  gem 'rubocop', '~> 1.4', require: false
+  gem 'rubocop-shopify', '~> 1.0.7', require: false
   gem 'rubocop-performance', require: false
 
   platform :mri, :truffleruby do
-    gem 'liquid-c', github: 'Shopify/liquid-c', ref: 'liquid-tag'
+    gem 'liquid-c', github: 'Shopify/liquid-c', ref: 'master'
   end
 end

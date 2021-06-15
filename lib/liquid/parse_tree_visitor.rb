@@ -11,7 +11,7 @@ module Liquid
     end
 
     def initialize(node, callbacks)
-      @node = node
+      @node      = node
       @callbacks = callbacks
     end
 
@@ -28,7 +28,7 @@ module Liquid
         item, new_context = @callbacks[node.class].call(node, context)
         [
           item,
-          ParseTreeVisitor.for(node, @callbacks).visit(new_context || context)
+          ParseTreeVisitor.for(node, @callbacks).visit(new_context || context),
         ]
       end
     end

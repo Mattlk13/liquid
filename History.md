@@ -1,5 +1,56 @@
 # Liquid Change Log
 
+## 5.0.2 (unreleased)
+
+### Features
+* Add `base64_encode`, `base64_decode`, `base64_url_safe_encode`, and `base64_url_safe_decode` filters (#1450) [Daniel Insley]
+
+### Fixes
+* Fix support for using a String subclass for the liquid source (#1421) [Dylan Thacker-Smith]
+
+## 5.0.1 / 2021-03-24
+
+### Fixes
+* Add ParseTreeVisitor to Echo tag (#1414) [CP Clermont]
+* Test with ruby 3.0 as the latest ruby version (#1398) [Dylan Thacker-Smith]
+* Handle carriage return in newlines_to_br (#1391) [Unending]
+
+### Performance Improvements
+* Use split limit in truncatewords (#1361) [Dylan Thacker-Smith]
+
+## 5.0.0 / 2021-01-06
+
+### Features
+* Add new `{% render %}` tag (#1122) [Samuel Doiron]
+* Add support for `as` in `{% render %}` and `{% include %}` (#1181) [Mike Angell]
+* Add `{% liquid %}` and `{% echo %}` tags (#1086) [Justin Li]
+* Add [usage tracking](README.md#usage-tracking) [Mike Angell]
+* Add `Tag.disable_tags` for disabling tags that prepend `Tag::Disableable` at render time (#1162, #1274, #1275) [Mike Angell]
+* Support using a profiler for multiple renders (#1365, #1366) [Dylan Thacker-Smith]
+
+### Fixes
+* Fix catastrophic backtracking in `RANGES_REGEX` regular expression (#1357) [Dylan Thacker-Smith]
+* Make sure the for tag's limit and offset are integers (#1094) [David Cornu]
+* Invokable methods for enumerable reject include (#1151) [Thierry Joyal]
+* Allow `default` filter to handle `false` as value (#1144) [Mike Angell]
+* Fix render length resource limit so it doesn't multiply nested output (#1285) [Dylan Thacker-Smith]
+* Fix duplication of text in raw tags (#1304) [Peter Zhu]
+* Fix strict parsing of find variable with a name expression (#1317) [Dylan Thacker-Smith]
+* Use monotonic time to measure durations in Liquid::Profiler (#1362) [Dylan Thacker-Smith]
+
+### Breaking Changes
+* Require Ruby >= 2.5 (#1131, #1310) [Mike Angell, Dylan Thacker-Smith]
+* Remove support for taint checking (#1268) [Dylan Thacker-Smith]
+* Split Strainer class into StrainerFactory and StrainerTemplate (#1208) [Thierry Joyal]
+* Remove handling of a nil context in the Strainer class (#1218) [Thierry Joyal]
+* Handle `BlockBody#blank?` at parse time (#1287) [Dylan Thacker-Smith]
+* Pass the tag markup and tokenizer to `Document#unknown_tag` (#1290) [Dylan Thacker-Smith]
+* And several internal changes
+
+### Performance Improvements
+* Reduce allocations (#1073, #1091, #1115, #1099, #1117, #1141, #1322, #1341) [Richard Monette, Florian Weingarten, Ashwin Maroli]
+* Improve resources limits performance (#1093, #1323) [Florian Weingarten, Dylan Thacker-Smith]
+
 ## 4.0.3 / 2019-03-12
 
 ### Fixed

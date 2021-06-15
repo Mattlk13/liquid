@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Liquid
   # Context keeps the variable stack and resolves variables, as well as keywords
   #
@@ -16,33 +18,36 @@ module Liquid
     attr_accessor :exception_renderer, :template_name, :partial, :global_filter, :strict_variables, :strict_filters
 
     # rubocop:disable Metrics/ParameterLists
-    def self.build(environments: {}, outer_scope: {}, registers: {}, rethrow_errors: false, resource_limits: nil, static_registers: {}, static_environments: {})
-      new(environments, outer_scope, registers, rethrow_errors, resource_limits, static_registers, static_environments)
+    def self.build(environments: {}, outer_scope: {}, registers: {}, rethrow_errors: false, resource_limits: nil, static_environments: {}, &block)
+      new(environments, outer_scope, registers, rethrow_errors, resource_limits, static_environments, &block)
     end
 
-    def initialize(environments = {}, outer_scope = {}, registers = {}, rethrow_errors = false, resource_limits = nil, static_registers = {}, static_environments = {})
-      @environments        = [environments].flatten
-      @static_environments = [static_environments].flatten.map(&:freeze).freeze
+    def initialize(environments = {}, outer_scope = {}, registers = {}, rethrow_errors = false, resource_limits = nil, static_environments = {})
+      @environments = [environments]
+      @environments.flatten!
+
+      @static_environments = [static_environments].flat_map(&:freeze).freeze
       @scopes              = [(outer_scope || {})]
       @registers           = registers
-      @static_registers    = static_registers.freeze
       @errors              = []
       @partial             = false
       @strict_variables    = false
       @resource_limits     = resource_limits || ResourceLimits.new(Template.default_resource_limits)
       @base_scope_depth    = 0
-      squash_instance_assigns_with_environments
-
-      @this_stack_used = false
+      @interrupts          = []
+      @filters             = []
+      @global_filter       = nil
+      @disabled_tags       = {}
 
       self.exception_renderer = Template.default_exception_renderer
       if rethrow_errors
-        self.exception_renderer = ->(e) { raise }
+        self.exception_renderer = Liquid::RAISE_EXCEPTION_LAMBDA
       end
 
-      @interrupts = []
-      @filters = []
-      @global_filter = nil
+      yield self if block_given?
+
+      # Do this last, since it could result in this object being passed to a Proc in the environment
+      squash_instance_assigns_with_environments
     end
     # rubocop:enable Metrics/ParameterLists
 
@@ -51,7 +56,7 @@ module Liquid
     end
 
     def strainer
-      @strainer ||= Strainer.create(self, @filters)
+      @strainer ||= StrainerFactory.create(self, @filters)
     end
 
     # Adds filters to this context.
@@ -86,7 +91,7 @@ module Liquid
     def handle_error(e, line_number = nil)
       e = internal_error unless e.is_a?(Liquid::Error)
       e.template_name ||= template_name
-      e.line_number ||= line_number
+      e.line_number   ||= line_number
       errors.push(e)
       exception_renderer.call(e).to_s
     end
@@ -120,19 +125,11 @@ module Liquid
     #   end
     #
     #   context['var]  #=> nil
-    def stack(new_scope = nil)
-      old_stack_used = @this_stack_used
-      if new_scope
-        push(new_scope)
-        @this_stack_used = true
-      else
-        @this_stack_used = false
-      end
-
+    def stack(new_scope = {})
+      push(new_scope)
       yield
     ensure
-      pop if @this_stack_used
-      @this_stack_used = old_stack_used
+      pop
     end
 
     # Creates a new context inheriting resource limits, filters, environment etc.,
@@ -140,17 +137,18 @@ module Liquid
     def new_isolated_subcontext
       check_overflow
 
-      Context.build(
+      self.class.build(
         resource_limits: resource_limits,
         static_environments: static_environments,
-        static_registers: static_registers
+        registers: StaticRegisters.new(registers)
       ).tap do |subcontext|
-        subcontext.base_scope_depth = base_scope_depth + 1
+        subcontext.base_scope_depth   = base_scope_depth + 1
         subcontext.exception_renderer = exception_renderer
-        subcontext.filters = @filters
+        subcontext.filters  = @filters
         subcontext.strainer = nil
-        subcontext.errors = errors
+        subcontext.errors   = errors
         subcontext.warnings = warnings
+        subcontext.disabled_tags = @disabled_tags
       end
     end
 
@@ -160,10 +158,6 @@ module Liquid
 
     # Only allow String, Numeric, Hash, Array, Proc, Boolean or <tt>Liquid::Drop</tt>
     def []=(key, value)
-      unless @this_stack_used
-        @this_stack_used = true
-        push({})
-      end
       @scopes[0][key] = value
     end
 
@@ -199,7 +193,7 @@ module Liquid
         try_variable_find_in_environments(key, raise_on_not_found: raise_on_not_found)
       end
 
-      variable = variable.to_liquid
+      variable         = variable.to_liquid
       variable.context = self if variable.respond_to?(:context=)
 
       variable
@@ -213,15 +207,30 @@ module Liquid
       value = obj[key]
 
       if value.is_a?(Proc) && obj.respond_to?(:[]=)
-        obj[key] = (value.arity == 0) ? value.call : value.call(self)
+        obj[key] = value.arity == 0 ? value.call : value.call(self)
       else
         value
       end
     end
 
+    def with_disabled_tags(tag_names)
+      tag_names.each do |name|
+        @disabled_tags[name] = @disabled_tags.fetch(name, 0) + 1
+      end
+      yield
+    ensure
+      tag_names.each do |name|
+        @disabled_tags[name] -= 1
+      end
+    end
+
+    def tag_disabled?(tag_name)
+      @disabled_tags.fetch(tag_name, 0) > 0
+    end
+
     protected
 
-    attr_writer :base_scope_depth, :warnings, :errors, :strainer, :filters
+    attr_writer :base_scope_depth, :warnings, :errors, :strainer, :filters, :disabled_tags
 
     private
 
@@ -244,7 +253,7 @@ module Liquid
     end
 
     def check_overflow
-      raise StackLevelError, "Nesting too deep".freeze if overflow?
+      raise StackLevelError, "Nesting too deep" if overflow?
     end
 
     def overflow?

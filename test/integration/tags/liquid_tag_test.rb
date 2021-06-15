@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'test_helper'
 
 class LiquidTagTest < Minitest::Test
@@ -79,6 +81,16 @@ class LiquidTagTest < Minitest::Test
     assert_match_syntax_error("syntax error (line 3): Unknown tag 'error'", "{% liquid echo ''\n  \n error %}")
   end
 
+  def test_nested_liquid_tag
+    assert_template_result('good', <<~LIQUID)
+      {%- if true %}
+        {%- liquid
+          echo "good"
+        %}
+      {%- endif -%}
+    LIQUID
+  end
+
   def test_cannot_open_blocks_living_past_a_liquid_tag
     assert_match_syntax_error("syntax error (line 3): 'if' tag was never closed", <<~LIQUID)
       {%- liquid
@@ -88,8 +100,8 @@ class LiquidTagTest < Minitest::Test
     LIQUID
   end
 
-  def test_quirk_can_close_blocks_created_before_a_liquid_tag
-    assert_template_result("42", <<~LIQUID)
+  def test_cannot_close_blocks_created_before_a_liquid_tag
+    assert_match_syntax_error("syntax error (line 3): 'endif' is not a valid delimiter for liquid tags. use %}", <<~LIQUID)
       {%- if true -%}
       42
       {%- liquid endif -%}

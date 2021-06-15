@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Liquid
   class Tag
     attr_reader :nodelist, :tag_name, :line_number, :parse_context
@@ -11,14 +13,20 @@ module Liquid
         tag
       end
 
+      def disable_tags(*tag_names)
+        @disabled_tags ||= []
+        @disabled_tags.concat(tag_names)
+        prepend(Disabler)
+      end
+
       private :new
     end
 
     def initialize(tag_name, markup, parse_context)
-      @tag_name   = tag_name
-      @markup     = markup
+      @tag_name      = tag_name
+      @markup        = markup
       @parse_context = parse_context
-      @line_number = parse_context.line_number
+      @line_number   = parse_context.line_number
     end
 
     def parse(_tokens)
@@ -33,7 +41,7 @@ module Liquid
     end
 
     def render(_context)
-      ''.freeze
+      ''
     end
 
     # For backwards compatibility with custom tags. In a future release, the semantics
@@ -46,6 +54,12 @@ module Liquid
 
     def blank?
       false
+    end
+
+    private
+
+    def parse_expression(markup)
+      parse_context.parse_expression(markup)
     end
   end
 end

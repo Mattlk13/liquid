@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Liquid
   # Templates are central to liquid.
   # Interpretating templates is a two step process. First you compile the
@@ -16,13 +18,11 @@ module Liquid
     attr_accessor :root
     attr_reader :resource_limits, :warnings
 
-    @@file_system = BlankFileSystem.new
-
     class TagRegistry
       include Enumerable
 
       def initialize
-        @tags = {}
+        @tags  = {}
         @cache = {}
       end
 
@@ -61,76 +61,54 @@ module Liquid
       # :lax acts like liquid 2.5 and silently ignores malformed tags in most cases.
       # :warn is the default and will give deprecation warnings when invalid syntax is used.
       # :strict will enforce correct syntax.
-      attr_writer :error_mode
-
-      # Sets how strict the taint checker should be.
-      # :lax is the default, and ignores the taint flag completely
-      # :warn adds a warning, but does not interrupt the rendering
-      # :error raises an error when tainted output is used
-      attr_writer :taint_mode
+      attr_accessor :error_mode
+      Template.error_mode = :lax
 
       attr_accessor :default_exception_renderer
       Template.default_exception_renderer = lambda do |exception|
         exception
       end
 
-      def file_system
-        @@file_system
-      end
+      attr_accessor :file_system
+      Template.file_system = BlankFileSystem.new
 
-      def file_system=(obj)
-        @@file_system = obj
-      end
+      attr_accessor :tags
+      Template.tags = TagRegistry.new
+      private :tags=
 
       def register_tag(name, klass)
         tags[name.to_s] = klass
       end
 
-      def tags
-        @tags ||= TagRegistry.new
-      end
-
-      def error_mode
-        @error_mode ||= :lax
-      end
-
-      def taint_mode
-        @taint_mode ||= :lax
-      end
-
       # Pass a module with filter methods which should be available
       # to all liquid views. Good for registering the standard library
       def register_filter(mod)
-        Strainer.global_filter(mod)
+        StrainerFactory.add_global_filter(mod)
       end
 
-      def default_resource_limits
-        @default_resource_limits ||= {}
-      end
+      attr_accessor :default_resource_limits
+      Template.default_resource_limits = {}
+      private :default_resource_limits=
 
       # creates a new <tt>Template</tt> object from liquid source code
       # To enable profiling, pass in <tt>profile: true</tt> as an option.
       # See Liquid::Profiler for more information
       def parse(source, options = {})
-        template = Template.new
-        template.parse(source, options)
+        new.parse(source, options)
       end
     end
 
     def initialize
-      @rethrow_errors = false
-      @resource_limits = ResourceLimits.new(self.class.default_resource_limits)
+      @rethrow_errors  = false
+      @resource_limits = ResourceLimits.new(Template.default_resource_limits)
     end
 
     # Parse source code.
     # Returns self for easy chaining
     def parse(source, options = {})
-      @options = options
-      @profiling = options[:profile]
-      @line_numbers = options[:line_numbers] || @profiling
-      parse_context = options.is_a?(ParseContext) ? options : ParseContext.new(options)
-      @root = Document.parse(tokenize(source), parse_context)
-      @warnings = parse_context.warnings
+      parse_context = configure_options(options)
+      tokenizer     = parse_context.new_tokenizer(source, start_line_number: @line_numbers && 1)
+      @root         = Document.parse(tokenizer, parse_context)
       self
     end
 
@@ -165,19 +143,19 @@ module Liquid
     #    filters and tags and might be useful to integrate liquid more with its host application
     #
     def render(*args)
-      return ''.freeze if @root.nil?
+      return '' if @root.nil?
 
       context = case args.first
       when Liquid::Context
         c = args.shift
 
         if @rethrow_errors
-          c.exception_renderer = ->(e) { raise }
+          c.exception_renderer = Liquid::RAISE_EXCEPTION_LAMBDA
         end
 
         c
       when Liquid::Drop
-        drop = args.shift
+        drop         = args.shift
         drop.context = Context.new([drop, assigns], instance_assigns, registers, @rethrow_errors, @resource_limits)
       when Hash
         Context.new([args.shift, assigns], instance_assigns, registers, @rethrow_errors, @resource_limits)
@@ -189,12 +167,16 @@ module Liquid
 
       output = nil
 
+      context_register = context.registers.is_a?(StaticRegisters) ? context.registers.static : context.registers
+
       case args.last
       when Hash
         options = args.pop
-        output = options[:output] if options[:output]
+        output  = options[:output] if options[:output]
 
-        registers.merge!(options[:registers]) if options[:registers].is_a?(Hash)
+        options[:registers]&.each do |key, register|
+          context_register[key] = register
+        end
 
         apply_options_to_context(context, options)
       when Module, Array
@@ -204,12 +186,13 @@ module Liquid
       # Retrying a render resets resource usage
       context.resource_limits.reset
 
+      if @profiling && context.profiler.nil?
+        @profiler = context.profiler = Liquid::Profiler.new
+      end
+
       begin
         # render the nodelist.
-        # for performance reasons we get an array back here. join will make a string out of it.
-        with_profiling(context) do
-          @root.render_to_output_buffer(context, output || '')
-        end
+        @root.render_to_output_buffer(context, output || +'')
       rescue Liquid::MemoryError => e
         context.handle_error(e)
       ensure
@@ -228,33 +211,25 @@ module Liquid
 
     private
 
-    def tokenize(source)
-      Tokenizer.new(source, @line_numbers)
-    end
-
-    def with_profiling(context)
-      if @profiling && !context.partial
+    def configure_options(options)
+      if (profiling = options[:profile])
         raise "Profiler not loaded, require 'liquid/profiler' first" unless defined?(Liquid::Profiler)
-
-        @profiler = Profiler.new
-        @profiler.start
-
-        begin
-          yield
-        ensure
-          @profiler.stop
-        end
-      else
-        yield
       end
+
+      @options      = options
+      @profiling    = profiling
+      @line_numbers = options[:line_numbers] || @profiling
+      parse_context = options.is_a?(ParseContext) ? options : ParseContext.new(options)
+      @warnings     = parse_context.warnings
+      parse_context
     end
 
     def apply_options_to_context(context, options)
       context.add_filters(options[:filters]) if options[:filters]
-      context.global_filter = options[:global_filter] if options[:global_filter]
+      context.global_filter      = options[:global_filter] if options[:global_filter]
       context.exception_renderer = options[:exception_renderer] if options[:exception_renderer]
-      context.strict_variables = options[:strict_variables] if options[:strict_variables]
-      context.strict_filters = options[:strict_filters] if options[:strict_filters]
+      context.strict_variables   = options[:strict_variables] if options[:strict_variables]
+      context.strict_filters     = options[:strict_filters] if options[:strict_filters]
     end
   end
 end
